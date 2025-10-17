@@ -1,9 +1,10 @@
 #include <stdint.h>
 
 #include "game.h"
-#include "mesh_data.h"
-#include "render_object.h"
-#include "shader.h"
+#include "assets/asset_manager.h"
+#include "rendering/mesh_data.h"
+#include "rendering/render_object.h"
+#include "rendering/shader.h"
 
 #include <common/backend.h>
 #include <common/game_api.h>
@@ -21,24 +22,7 @@ GameAPI* get_game_api(void) {
     return &api;
 }
 
-static GLFWwindow* window = NULL;
-
-const char *vertex_src = "#version 330 core\n"
-    "layout (location = 0) in vec3 aPos;\n"
-    "layout (location = 1) in vec3 aNormal;\n"
-    "layout (location = 2) in vec2 aUV;\n"
-    "layout (location = 3) in vec4 aColor;\n"
-    "void main()\n"
-    "{\n"
-    "   gl_Position = vec4(aPos.x, aPos.y, aPos.z, 1.0);\n"
-    "}\0";
-const char *fragment_src = "#version 330 core\n"
-    "out vec4 FragColor;\n"
-    "void main()\n"
-    "{\n"
-    "   FragColor = vec4(1.0f, 0.0f, 0.2f, 1.0f);\n"
-    "}\n\0";
-
+static GLFWwindow* glfw_window = NULL;
 
 Vertex vertices[] = {
     { .pos = {  0.5f,  0.5f,  0.0f } }, // top right
@@ -61,20 +45,30 @@ MeshData mesh = {
 ProgramHandle shader_prog;
 RenderObject render_obj;
 
+ShaderAsset vertex_src;
+ShaderAsset fragment_src;
+
 void load_gl(void) {
     i32 version = gladLoadGL(glfwGetProcAddress);
     LOG("loaded GL version %d.%d", GLAD_VERSION_MAJOR(version), GLAD_VERSION_MINOR(version));
 }
 
+void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods) {
+}
 
-void game_init(GLFWwindow* _window) {
-    window = _window;
+
+void game_init(GLFWwindow* window) {
     WARN("game init!");
+    glfw_window = window;
+
+    glfwSetKeyCallback(glfw_window, key_callback);
 
     load_gl();
+    vertex_src = load_shader_asset("../assets/shader/default.vert");
+    fragment_src = load_shader_asset("../assets/shader/default.frag");
 
-    ShaderHandle vert_shader = create_shader(GL_VERTEX_SHADER, vertex_src);
-    ShaderHandle frag_shader = create_shader(GL_FRAGMENT_SHADER, fragment_src);
+    ShaderHandle vert_shader = create_shader(GL_VERTEX_SHADER, vertex_src.contents);
+    ShaderHandle frag_shader = create_shader(GL_FRAGMENT_SHADER, fragment_src.contents);
 
     shader_prog = create_program(vert_shader, frag_shader);
     render_obj = create_render_object(&mesh);
@@ -108,8 +102,13 @@ void game_render(void) {
 void game_shutdown(void) {
     WARN("game shutdown!");
 
+    glfwSetKeyCallback(glfw_window, NULL);
+
     delete_render_object(render_obj);
     delete_program(shader_prog);
+
+    delete_shader_asset(vertex_src);
+    delete_shader_asset(fragment_src);
 }
 
 

@@ -5,9 +5,9 @@
 #include "vertex.h"
 
 typedef struct {
-    Vertex *vertices;
+    Vertex* vertices;
     u32 vertex_count;
-    u32 *indices;
+    u32* indices;
     u32 index_count;
 } MeshData;
 

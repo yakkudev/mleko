@@ -2,6 +2,7 @@
 
 #include <common/log.h>
 #include <common/game_api.h>
+#include <common/types.h>
 
 #include <glad/gl.h>
 #include <GLFW/glfw3.h>
@@ -12,12 +13,14 @@
 #include <sys/inotify.h>
 #include <unistd.h>
 
-static const char *GAMELIB_PATH = "./libgame.so";
-static const char *GAMELIB_TOUCHPOINT = "./touch.point";
+static const char* GAMELIB_PATH = "./libgame.so";
+static const char* GAMELIB_TOUCHPOINT = "./touch.point";
 
-static void *game_lib = NULL;
+static void* game_lib = NULL;
 static GameAPI game = {0};
 static GLFWwindow* window = NULL;
+
+static f64 last_reload = -1.0;
 
 void close_game(void) {
     if (!game_lib)
@@ -32,10 +35,15 @@ void close_game(void) {
 }
 
 void load_game(void) {
+    // reload timeout
+    const f64 load_start = glfwGetTime();
+
+    if (load_start - last_reload < 1.0)
+        return;
+
     if (game_lib)
         close_game(); 
 
-    const double load_start = glfwGetTime();
 
     LOG("loading libgame");
     game_lib = dlopen(GAMELIB_PATH, RTLD_NOW);
@@ -54,7 +62,9 @@ void load_game(void) {
 
     game = *get_api();
     if (game.init) game.init(window);
-    LOG("finished loading libgame in %f seconds", glfwGetTime() - load_start);
+    const f64 load_end = glfwGetTime();
+    LOG("finished loading libgame in %f seconds", load_end - load_start);
+    last_reload = load_end;
 }
 
 int main(void) {
@@ -79,17 +89,17 @@ int main(void) {
     load_game();
 
 #ifndef _WIN32
-    int fd = inotify_init1(IN_NONBLOCK);
-    int wd = inotify_add_watch(fd, GAMELIB_TOUCHPOINT, IN_CLOSE_WRITE);
+    i32 fd = inotify_init1(IN_NONBLOCK);
+    i32 wd = inotify_add_watch(fd, GAMELIB_TOUCHPOINT, IN_CLOSE_WRITE);
 #endif
 
-    double lastTime = glfwGetTime();
+    f64 last_time = glfwGetTime();
 
     while (!glfwWindowShouldClose(window)) {
         glfwPollEvents();
-        double now = glfwGetTime();
-        float dt = (float)(now - lastTime);
-        lastTime = now;
+        f64 now = glfwGetTime();
+        f32 dt = (f32)(now - last_time);
+        last_time = now;
 
 #ifndef _WIN32
         struct inotify_event ev;
@@ -106,7 +116,7 @@ int main(void) {
         glfwSwapBuffers(window);
     }
 
-    if (game.shutdown) game.shutdown();
+    close_game();
 
 #ifndef _WIN32
     inotify_rm_watch(fd, wd);
@@ -114,8 +124,6 @@ int main(void) {
 
     glfwDestroyWindow(window);
     glfwTerminate();
-
-    close_game();
 
     return 0;
 }
