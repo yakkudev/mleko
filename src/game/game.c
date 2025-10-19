@@ -11,6 +11,8 @@
 #include <common/log.h>
 #include <common/types.h>
 
+#define STB_IMAGE_IMPLEMENTATION
+#include <stb/stb_image.h>
 
 GameAPI* get_game_api(void) {
     static GameAPI api = {
@@ -25,11 +27,12 @@ GameAPI* get_game_api(void) {
 static GLFWwindow* glfw_window = NULL;
 
 Vertex vertices[] = {
-    { .pos = {  0.5f,  0.5f,  0.0f } }, // top right
-    { .pos = {  0.5f, -0.5f,  0.0f } }, // bottom right
-    { .pos = { -0.5f, -0.5f,  0.0f } }, // bottom left
-    { .pos = { -0.5f,  0.5f,  0.0f } }, // top left
+    { .pos = {  0.5f,  0.5f,  0.0f }, .uv = { 1.0f, 1.0f } }, // top right
+    { .pos = {  0.5f, -0.5f,  0.0f }, .uv = { 1.0f, 0.0f } }, // bottom right
+    { .pos = { -0.5f, -0.5f,  0.0f }, .uv = { 0.0f, 0.0f } }, // bottom left
+    { .pos = { -0.5f,  0.5f,  0.0f }, .uv = { 0.0f, 1.0f } }, // top left
 };
+
 u32 indices[] = { 
     0, 1, 3,
     1, 2, 3 
@@ -47,6 +50,8 @@ RenderObject render_obj;
 
 ShaderAsset vertex_src;
 ShaderAsset fragment_src;
+
+static u32 texture = 0;
 
 void load_gl(void) {
     i32 version = gladLoadGL(glfwGetProcAddress);
@@ -75,6 +80,27 @@ void game_init(GLFWwindow* window) {
 
     delete_shader(vert_shader);
     delete_shader(frag_shader);
+
+    glGenTextures(1, &texture);
+    glBindTexture(GL_TEXTURE_2D, texture);
+
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    
+    i32 width, height, num_channels;
+    stbi_set_flip_vertically_on_load(true);
+    u8 *data = stbi_load("../assets/image/img.png", &width, &height, &num_channels, 0);
+    if (data) {
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, data);
+        glGenerateMipmap(GL_TEXTURE_2D);
+    }
+    else {
+        ERROR("failed to load texture");
+    }
+    stbi_image_free(data);
+
 }
 
 void game_update(f32 dt) {
@@ -86,11 +112,12 @@ void game_render(void) {
     glClearColor(0.2f, 0.2f, 0.3f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT);
 
+    i32 uTime_location = glGetUniformLocation(shader_prog.id, "uTime");
+    // i32 uImage_location = glGetUniformLocation(shader_prog.id, "uImage");
     use_program(shader_prog);
-
-    glBindVertexArray(render_obj.VAO);
-    glDrawElements(GL_TRIANGLES, render_obj.mesh->index_count, GL_UNSIGNED_INT, 0);
-    glBindVertexArray(0);
+    glUniform1f(uTime_location, glfwGetTime());
+    glBindTexture(GL_TEXTURE_2D, texture);
+    render_render_object(render_obj);
 
     u32 error = glGetError();
     while (error) {

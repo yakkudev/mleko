@@ -1,3 +1,6 @@
 [submodule "include/thirdparty/cglm"]
 	path = include/thirdparty/cglm
 	url = https://github.com/recp/cglm.git
+[submodule "include/thirdparty/stb"]
+	path = include/thirdparty/stb
+	url = https://github.com/nothings/stb

@@ -56,3 +56,10 @@ void delete_render_object(RenderObject render_obj) {
     glDeleteBuffers(1, &render_obj.VBO);
     glDeleteBuffers(1, &render_obj.EBO);
 }
+
+void render_render_object(RenderObject render_obj) {
+    glBindVertexArray(render_obj.VAO);
+    glDrawElements(GL_TRIANGLES, render_obj.mesh->index_count, GL_UNSIGNED_INT, 0);
+    glBindVertexArray(0);
+}
+
