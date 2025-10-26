@@ -19,3 +19,5 @@ void delete_shader(ShaderHandle shader);
 ProgramHandle create_program(ShaderHandle vertex, ShaderHandle fragment);
 void delete_program(ProgramHandle program);
 void use_program(ProgramHandle program);
+void setup_program_textures(ProgramHandle program, i32 count, const char** uniform_names);
+

@@ -2,6 +2,9 @@
 
 #include <common/types.h>
 
+#include "../memory/arena.h"
+#include "../rendering/material.h"
+
 
 typedef struct {
     u32 id;
@@ -9,14 +12,13 @@ typedef struct {
     void* contents;
 } ShaderAsset;
 
-typedef struct {
-    ShaderAsset* shaders;
-} Assets;
+void resman_init();
+void resman_destroy();
 
-void asset_manager_init();
-void asset_manager_destroy();
+Material* resman_new_material(Material* material);
 
 void* read_file(const char* name, usize* out_size);
+void free_file(void* file_ptr);
 
 ShaderAsset load_shader_asset(const char* name);
 void delete_shader_asset(ShaderAsset asset);

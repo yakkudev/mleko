@@ -5,11 +5,14 @@ layout (location = 2) in vec2 _uv;
 layout (location = 3) in vec4 _color;
 
 uniform float uTime;
+uniform mat4 uView;
+uniform mat4 uProj;
 
 out vec2 _texCoord;
 
 void main() {
-    gl_Position = vec4(_pos.x, _pos.y + (sin(uTime * 2.0) + 1.0) * 0.25 , _pos.z, 1.0);
+    vec4 pos = vec4(_pos.x, _pos.y + sin(uTime) * 0.25 , _pos.z, 1.0);
+    gl_Position = uProj * uView * pos;
 
     _texCoord = _uv;
 }

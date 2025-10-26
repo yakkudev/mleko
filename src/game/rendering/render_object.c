@@ -2,6 +2,7 @@
 
 #include <common/types.h>
 #include <common/log.h>
+#include "material.h"
 #include "vertex.h"
 
 void setup_vertex_attribs(void) {
@@ -22,8 +23,8 @@ void setup_vertex_attribs(void) {
     glEnableVertexAttribArray(3);
 }
 
-RenderObject create_render_object(MeshData* mesh) {
-    RenderObject render_obj = { .mesh = mesh };
+RenderObject create_render_object(MeshData* mesh, Material* material) {
+    RenderObject render_obj = { .mesh = mesh, .material = material };
 
     // generate objects
     glGenVertexArrays(1, &render_obj.VAO);
@@ -58,6 +59,7 @@ void delete_render_object(RenderObject render_obj) {
 }
 
 void render_render_object(RenderObject render_obj) {
+    use_material(render_obj.material);
     glBindVertexArray(render_obj.VAO);
     glDrawElements(GL_TRIANGLES, render_obj.mesh->index_count, GL_UNSIGNED_INT, 0);
     glBindVertexArray(0);

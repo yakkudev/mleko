@@ -1,16 +1,45 @@
-#include "asset_manager.h"
+#include "resource_manager.h"
+
+#include "../rendering/material.h"
 
 #include <common/log.h>
 #include <errno.h>
 #include <string.h>
 #include <stdlib.h>
 
-void asset_manager_init() { 
+#define MAX_MATERIALS 512
 
+typedef struct {
+    const char* name;
+    void* ptr;
+} AssetValue;
+
+struct Assets{
+    ShaderAsset* shaders;
+    AssetValue materials[MAX_MATERIALS];
+    Arena material_arena;
+} Assets;
+
+void resman_init() { 
+    Assets = (struct Assets){ };
+    Assets.material_arena = arena_create(MAX_MATERIALS * sizeof(Material));
 }
 
-void asset_manager_destroy() { 
+void resman_destroy() { 
+    arena_release(&Assets.material_arena);
+}
 
+Material* resman_new_material(Material* material) {
+    usize size = sizeof(Material);
+    Material* ptr = arena_alloc(&Assets.material_arena, size);
+    memcpy(ptr, material, size);
+    LOG("creating new material: %s", ptr->name);
+
+    return ptr;
+}
+
+void resman_delete_material(Material* material) {
+    WARN("TODO: cannot delete material yet, convert arena into pool maybe");
 }
 
 void* read_file(const char* filename, usize* out_size) {
@@ -63,6 +92,10 @@ void* read_file(const char* filename, usize* out_size) {
     return buffer;
 }
 
+void free_file(void* file_ptr) {
+    free(file_ptr);
+}
+
 ShaderAsset load_shader_asset(const char* name) {
     ShaderAsset asset = { };
     asset.contents = read_file(name, &asset.size);
@@ -70,6 +103,6 @@ ShaderAsset load_shader_asset(const char* name) {
 }
 
 void delete_shader_asset(ShaderAsset asset) {
-    free(asset.contents);
+    free_file(asset.contents);
 }
 

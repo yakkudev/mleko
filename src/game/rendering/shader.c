@@ -51,3 +51,11 @@ void use_program(ProgramHandle program) {
     glUseProgram(program.id);
 }
 
+void setup_program_textures(ProgramHandle program, i32 count, const char** uniform_names) {
+    use_program(program);
+    if (count > 16)
+        WARN("setting up program with more than 16 textures!");
+    for (i32 i = 0; i < count; i++)
+        glUniform1i(glGetUniformLocation(program.id, uniform_names[i]), i);
+    return;
+}
