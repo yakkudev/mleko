@@ -2,6 +2,7 @@
 
 #include "game.h"
 #include "cglm/types.h"
+#include "cglm/util.h"
 #include "cglm/vec3.h"
 #include "resources/resource_manager.h"
 #include "rendering/material.h"
@@ -17,6 +18,14 @@
 
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb/stb_image.h>
+
+#define WORLD_UP (vec3){ 0.0f, 1.0f, 0.0f }
+#define WORLD_FORWARD (vec3){ 0.0f, 0.0f, -1.0f }
+#define WORLD_RIGHT (vec3){ 1.0f, 0.0f, 0.0f }
+
+#define WORLD_DOWN (vec3){ 0.0f, -1.0f, 0.0f }
+#define WORLD_BACK (vec3){ 0.0f, 0.0f, 1.0f }
+#define WORLD_LEFT (vec3){ -1.0f, 0.0f, 0.0f }
 
 GameAPI* get_game_api(void) {
     static GameAPI api = {
@@ -61,8 +70,12 @@ struct Cam {
     struct {
         mat4 view;
         mat4 projection;
-    } matrix;
+        vec3 orientation;
+    } computed;
 } Cam;
+
+f64 last_mouse_x;
+f64 last_mouse_y;
 
 ProgramHandle shader_prog;
 RenderObject render_obj;
@@ -90,15 +103,23 @@ void framebuffer_resize_callback(GLFWwindow* window, i32 width, i32 height) {
 
 
 void calculate_cam_matrices() {
-    vec3 UP = { 0, 1, 0 };
+    glm_perspective(Cam.fovy, (f32)window_width / (f32)window_height, Cam.z_near, Cam.z_far, Cam.computed.projection);
 
-    glm_perspective(Cam.fovy, (f32)window_width / (f32)window_height, Cam.z_near, Cam.z_far, Cam.matrix.projection);
-    vec3 dir = { 
+    Cam.yaw = fmodf(Cam.yaw, GLM_TAUf);
+    f32 pitch_bumper = 0.0001;
+    Cam.pitch = glm_clamp(Cam.pitch, -GLM_PI_2f + pitch_bumper, GLM_PI_2f - pitch_bumper);
+
+    vec3 look_dir = { 
         cos(Cam.pitch) * sin(Cam.yaw),
         sin(Cam.pitch),
         -cos(Cam.pitch) * cos(Cam.yaw)
     };
-    glm_look(Cam.pos, dir, UP, Cam.matrix.view);
+    Cam.computed.orientation[0] = look_dir[0];
+    Cam.computed.orientation[1] = 0.0;
+    Cam.computed.orientation[2] = look_dir[2];
+    glm_normalize(Cam.computed.orientation);
+
+    glm_look(Cam.pos, look_dir, WORLD_UP, Cam.computed.view);
 }
 
 void game_init(GLFWwindow* window) {
@@ -115,6 +136,9 @@ void game_init(GLFWwindow* window) {
     glfwGetFramebufferSize(glfw_window, &window_width, &window_height);
     framebuffer_resize_callback(glfw_window, window_width, window_height);
 
+    // raw input
+    if (glfwRawMouseMotionSupported())
+        glfwSetInputMode(window, GLFW_RAW_MOUSE_MOTION, GLFW_TRUE);
 
     Cam = (struct Cam) {
         .fovy = glm_rad(80.0),
@@ -127,10 +151,15 @@ void game_init(GLFWwindow* window) {
     vertex_src = load_shader_asset("../assets/shader/default.vert");
     fragment_src = load_shader_asset("../assets/shader/default.frag");
 
-    ShaderHandle vert_shader = create_shader(GL_VERTEX_SHADER, vertex_src.contents);
-    ShaderHandle frag_shader = create_shader(GL_FRAGMENT_SHADER, fragment_src.contents);
+    {
+        ShaderHandle vert_shader = create_shader(GL_VERTEX_SHADER, vertex_src.contents);
+        ShaderHandle frag_shader = create_shader(GL_FRAGMENT_SHADER, fragment_src.contents);
 
-    shader_prog = create_program(vert_shader, frag_shader);
+        shader_prog = create_program(vert_shader, frag_shader);
+
+        delete_shader(vert_shader);
+        delete_shader(frag_shader);
+    }
 
 
     // FIXME: this might be undefined behavior lol
@@ -146,22 +175,20 @@ void game_init(GLFWwindow* window) {
             .location = glGetUniformLocation(shader_prog.id, "uView"),
             .type = UNIFORM_MAT4,
             .is_ptr = true,
-            .data.ptr = &Cam.matrix.view
+            .data.ptr = &Cam.computed.view
         };
 
         std_uniforms[2] = (ProgramUniform){ 
             .location = glGetUniformLocation(shader_prog.id, "uProj"),
             .type = UNIFORM_MAT4,
             .is_ptr = true,
-            .data.ptr = &Cam.matrix.projection
+            .data.ptr = &Cam.computed.projection
         };
     }
 
     Material* mat = resman_new_material(&(Material){"default", shader_prog, 3, std_uniforms});
     render_obj = create_render_object(&mesh, mat);
 
-    delete_shader(vert_shader);
-    delete_shader(frag_shader);
 
     const char* prog_textures[] = { "uTexture" };
     setup_program_textures(shader_prog, 1, prog_textures);
@@ -190,17 +217,50 @@ void game_init(GLFWwindow* window) {
 
 void game_update(f32 dt) {
     current_time = glfwGetTime() * 2.0f;
-    // LOG("game update! delta: %f", dt);
-    //
 
-    f32 speed = 1.0 * dt;
+    f32 move_speed = 1.0 * dt;
+    f64 sensitivity = glm_rad(0.03);
+
+    // mouse input
+    f64 mouse_x, mouse_y;
+    glfwGetCursorPos(glfw_window, &mouse_x, &mouse_y);        
+
+    f64 mouse_dx = last_mouse_x - mouse_x;
+    f64 mouse_dy = last_mouse_y - mouse_y;
+    last_mouse_x = mouse_x;
+    last_mouse_y = mouse_y;
+
+    // wasd move
     vec3 wish_dir = {
         (glfwGetKey(glfw_window, GLFW_KEY_D) == GLFW_PRESS) - (glfwGetKey(glfw_window, GLFW_KEY_A) == GLFW_PRESS),
         0.0,
-        (glfwGetKey(glfw_window, GLFW_KEY_S) == GLFW_PRESS) - (glfwGetKey(glfw_window, GLFW_KEY_W) == GLFW_PRESS),
+        (glfwGetKey(glfw_window, GLFW_KEY_W) == GLFW_PRESS) - (glfwGetKey(glfw_window, GLFW_KEY_S) == GLFW_PRESS),
     };
-    glm_vec3_scale(wish_dir, speed, wish_dir);
-    glm_vec3_add(Cam.pos, wish_dir, Cam.pos);
+    glm_vec3_scale(wish_dir, move_speed, wish_dir);
+
+    vec3 right = {};
+    glm_vec3_cross(Cam.computed.orientation, WORLD_UP, right);
+    glm_vec3_normalize(right);
+
+    vec3 move = {};
+    glm_vec3_scale(Cam.computed.orientation, wish_dir[2], move);
+
+    vec3 right_move = {};
+    glm_vec3_scale(right, wish_dir[0], right_move);
+    glm_vec3_add(move, right_move, move);
+
+    glm_vec3_add(Cam.pos, move, Cam.pos);
+
+
+    // mouse look
+    if (glfwGetMouseButton(glfw_window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS) {
+        Cam.pitch += mouse_dy * sensitivity;
+        Cam.yaw += -mouse_dx * sensitivity;
+
+        glfwSetInputMode(glfw_window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+    } else {
+        glfwSetInputMode(glfw_window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+    }
 
     calculate_cam_matrices();
 }
